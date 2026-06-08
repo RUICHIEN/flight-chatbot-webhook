@@ -199,9 +199,11 @@ def build_reply(origin, destination, outbound_date, flights):
     if not flights:
         return f"目前查不到 {origin} 到 {destination} 在 {outbound_date} 的機票資料。"
 
-    reply = f"我幫你查到 {len(flights)} 筆 {origin} 到 {destination} 在 {outbound_date} 的機票：\n\n"
+    display_flights = flights[:3]
 
-    for index, flight in enumerate(flights, start=1):
+    reply = f"我幫你查到 {len(display_flights)} 筆 {origin} 到 {destination} 在 {outbound_date} 的機票：\n\n"
+
+    for index, flight in enumerate(display_flights, start=1):
         reply += (
             f"{index}. {flight['airline']}\n"
             f"價格：約 NT${flight['price']}\n"
@@ -211,6 +213,6 @@ def build_reply(origin, destination, outbound_date, flights):
             f"包含：{flight['include']}\n\n"
         )
 
-    reply += "提醒：機票價格會即時變動，實際金額與行李規則請以購買頁面為準。"
+    reply += "提醒：機票價格會即時變動，實際金額、行李與票種內容請以購買頁面為準。"
 
     return reply
