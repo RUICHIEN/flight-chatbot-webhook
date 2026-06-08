@@ -193,6 +193,61 @@ def search_flights_from_serpapi(origin_code, destination_code, outbound_date):
 
     return results
 
+@app.route("/line-webhook", methods=["GET", "POST"])
+def line_webhook():
+    if request.method == "GET":
+        return "LINE webhook endpoint is running."
+
+    data = request.get_json(silent=True)
+
+    if not data:
+        return "No JSON received", 400
+
+    events = data.get("events", [])
+
+    for event in events:
+        if event.get("type") == "message":
+            message = event.get("message", {})
+            reply_token = event.get("replyToken")
+
+            if message.get("type") == "text":
+                user_text = message.get("text", "")
+
+                reply_text = f"LINE webhook 收到了：{user_text}"
+
+                reply_to_line(reply_token, reply_text)
+
+    return "OK", 200
+
+def reply_to_line(reply_token, reply_text):
+    channel_access_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+
+    if not channel_access_token:
+        print("LINE_CHANNEL_ACCESS_TOKEN not found")
+        return
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {channel_access_token}"
+    }
+
+    body = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "text",
+                "text": reply_text
+            }
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=body)
+
+    print("LINE reply status:", response.status_code)
+    print("LINE reply response:", response.text)
+
 
 # def build_reply(origin, destination, outbound_date, flights):
 #     if isinstance(flights, dict) and flights.get("error") == "SERPAPI_KEY_NOT_FOUND":
