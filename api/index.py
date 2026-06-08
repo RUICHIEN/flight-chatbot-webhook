@@ -8,11 +8,18 @@ def home():
     return "Flight webhook is running."
 
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    req = request.get_json()
+    if request.method == "GET":
+        return "Webhook endpoint is running. Please use POST from Dialogflow."
 
-    # 取得 Dialogflow ES 傳來的參數
+    req = request.get_json(silent=True)
+
+    if not req:
+        return jsonify({
+            "fulfillmentText": "Webhook 有收到請求，但沒有收到 JSON 資料。"
+        })
+
     parameters = req.get("queryResult", {}).get("parameters", {})
 
     origin = parameters.get("origin", "未提供出發地")
@@ -24,7 +31,3 @@ def webhook():
     return jsonify({
         "fulfillmentText": reply_text
     })
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
