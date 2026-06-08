@@ -73,10 +73,18 @@ def webhook():
 
     flights = search_flights_from_serpapi(origin_code, destination_code, outbound_date)
 
-    reply_text = build_reply(origin, destination, outbound_date, flights)
+    reply_messages = build_reply_messages(origin, destination, outbound_date, flights)
 
     return jsonify({
-        "fulfillmentText": reply_text
+        "fulfillmentText": "\n\n".join(reply_messages),
+        "fulfillmentMessages": [
+            {
+                "text": {
+                    "text": [message]
+                }
+            }
+            for message in reply_messages
+        ]
     })
 
 
@@ -186,33 +194,68 @@ def search_flights_from_serpapi(origin_code, destination_code, outbound_date):
     return results
 
 
-def build_reply(origin, destination, outbound_date, flights):
+# def build_reply(origin, destination, outbound_date, flights):
+#     if isinstance(flights, dict) and flights.get("error") == "SERPAPI_KEY_NOT_FOUND":
+#         return "目前 Vercel 尚未設定 SERPAPI_KEY，所以無法查詢真實機票資料。"
+
+#     if isinstance(flights, dict) and flights.get("error") == "REQUEST_FAILED":
+#         return f"查詢機票 API 時發生連線問題：{flights.get('message')}"
+
+#     if isinstance(flights, dict) and flights.get("error") == "SERPAPI_ERROR":
+#         return f"SerpApi 回傳錯誤：{flights.get('message')}"
+
+#     if not flights:
+#         return f"目前查不到 {origin} 到 {destination} 在 {outbound_date} 的機票資料。"
+
+#     display_flights = flights[:3]
+
+#     reply = f"我幫你查到 {len(display_flights)} 筆 {origin} 到 {destination} 在 {outbound_date} 的機票：\n\n"
+
+#     for index, flight in enumerate(display_flights, start=1):
+#         reply += (
+#             f"{index}. {flight['airline']}\n"
+#             f"價格：約 NT${flight['price']}\n"
+#             f"時間：{flight['departure_time']} → {flight['arrival_time']}\n"
+#             f"航程：{flight['duration']} 分鐘\n"
+#             f"轉機：{flight['transfer']}\n"
+#             f"包含：{flight['include']}\n\n"
+#         )
+
+#     reply += "提醒：機票價格會即時變動，實際金額、行李與票種內容請以購買頁面為準。"
+
+#     return reply
+
+def build_reply_messages(origin, destination, outbound_date, flights):
     if isinstance(flights, dict) and flights.get("error") == "SERPAPI_KEY_NOT_FOUND":
-        return "目前 Vercel 尚未設定 SERPAPI_KEY，所以無法查詢真實機票資料。"
+        return ["目前 Vercel 尚未設定 SERPAPI_KEY，所以無法查詢真實機票資料。"]
 
     if isinstance(flights, dict) and flights.get("error") == "REQUEST_FAILED":
-        return f"查詢機票 API 時發生連線問題：{flights.get('message')}"
+        return [f"查詢機票 API 時發生連線問題：{flights.get('message')}"]
 
     if isinstance(flights, dict) and flights.get("error") == "SERPAPI_ERROR":
-        return f"SerpApi 回傳錯誤：{flights.get('message')}"
+        return [f"SerpApi 回傳錯誤：{flights.get('message')}"]
 
     if not flights:
-        return f"目前查不到 {origin} 到 {destination} 在 {outbound_date} 的機票資料。"
+        return [f"目前查不到 {origin} 到 {destination} 在 {outbound_date} 的機票資料。"]
 
     display_flights = flights[:3]
 
-    reply = f"我幫你查到 {len(display_flights)} 筆 {origin} 到 {destination} 在 {outbound_date} 的機票：\n\n"
+    messages = [
+        f"我幫你查到 {len(display_flights)} 筆 {origin} 到 {destination} 在 {outbound_date} 的機票："
+    ]
 
     for index, flight in enumerate(display_flights, start=1):
-        reply += (
-            f"{index}. {flight['airline']}\n"
+        message = (
+            f"第 {index} 筆\n"
+            f"航空：{flight['airline']}\n"
             f"價格：約 NT${flight['price']}\n"
             f"時間：{flight['departure_time']} → {flight['arrival_time']}\n"
             f"航程：{flight['duration']} 分鐘\n"
             f"轉機：{flight['transfer']}\n"
-            f"包含：{flight['include']}\n\n"
+            f"備註：實際行李、餐點與票種內容請以購買頁面為準。"
         )
+        messages.append(message)
 
-    reply += "提醒：機票價格會即時變動，實際金額、行李與票種內容請以購買頁面為準。"
+    messages.append("提醒：機票價格會即時變動，實際金額與行李規則請以購買頁面為準。")
 
-    return reply
+    return messages
