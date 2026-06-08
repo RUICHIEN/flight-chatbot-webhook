@@ -112,6 +112,7 @@ def search_flights_from_serpapi(origin_code, destination_code, outbound_date):
         "departure_id": origin_code,
         "arrival_id": destination_code,
         "outbound_date": outbound_date,
+        "type": "2",
         "currency": "TWD",
         "hl": "zh-tw",
         "api_key": api_key
