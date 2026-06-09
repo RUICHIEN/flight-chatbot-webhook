@@ -656,19 +656,45 @@ def handle_line_message(user_id, user_text):
 
         outbound_date = state.get("date")
 
+        origin_code = convert_to_airport_code(origin)
+        destination_code = convert_to_airport_code(destination)
+        if not origin_code:
+            return (
+                f"我目前無法判斷出發地「{origin}」對應的機場。\n\n"
+                "請改用城市名稱或三碼機場代碼，例如：\n"
+                "台北、桃園、TPE。"
+            )
+
+        if not destination_code:
+            return (
+                f"我目前無法判斷目的地「{destination}」對應的機場。\n\n"
+                "請改用城市名稱或三碼機場代碼，例如：\n"
+                "東京、大阪、KIX、NRT。"
+            )
+
+        flights = search_flights_from_serpapi(
+            origin_code,
+            destination_code,
+            outbound_date
+        )
         USER_STATE[user_id] = {
             "step": "RESULT_READY",
             "date": outbound_date,
             "origin": origin,
-            "destination": destination
+            "destination": destination,
+            "origin_code": origin_code,
+            "destination_code": destination_code,
+            "last_flights": flights
         }
 
-        return (
-            f"收到，準備查詢：\n"
-            f"日期：{outbound_date}\n"
-            f"路線：{origin} → {destination}\n\n"
-            "下一步會接上機票 API 查詢。"
+        messages = build_reply_messages(
+            origin,
+            destination,
+            outbound_date,
+            flights
         )
+
+        return "\n\n".join(messages)
 
     # 使用者詢問如何購買
     if user_text in ["如何購買", "怎麼買", "我要怎麼買"]:
