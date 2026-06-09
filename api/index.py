@@ -701,14 +701,7 @@ def handle_line_message(user_id, user_text):
         if state.get("step") != "RESULT_READY":
             return "請先查詢一次機票，再輸入「如何購買」。"
 
-        return (
-            "你可以依照上一筆查詢結果，到 Google Flights、航空公司官網或訂票平台確認。\n\n"
-            "實際購買前建議確認：\n"
-            "1. 最終票價\n"
-            "2. 是否含托運行李\n"
-            "3. 是否需要轉機\n"
-            "4. 付款手續費與退改票規則"
-        )
+        return build_purchase_advice(state)
 
     # 預設回覆
     return (
@@ -752,3 +745,40 @@ def parse_route_from_text(text):
     destination = route_match.group(3).strip()
 
     return origin, destination
+
+def build_purchase_advice(state):
+    date = state.get("date", "未提供日期")
+    origin = state.get("origin", "未提供出發地")
+    destination = state.get("destination", "未提供目的地")
+    flights = state.get("last_flights", [])
+
+    if isinstance(flights, dict) or not flights:
+        return (
+            "上一筆查詢沒有可用的機票結果。\n\n"
+            "請重新輸入「我想查機票」，查詢一次新的機票資料。"
+        )
+
+    first_flight = flights[0]
+
+    airline = first_flight.get("airline", "未提供航空公司")
+    price = first_flight.get("price", "未提供價格")
+    departure_time = first_flight.get("departure_time", "未提供")
+    arrival_time = first_flight.get("arrival_time", "未提供")
+    transfer = first_flight.get("transfer", "未提供")
+
+    return (
+        "可以依照上一筆查詢結果去購買。\n\n"
+        f"上一筆最便宜結果：\n"
+        f"日期：{date}\n"
+        f"路線：{origin} → {destination}\n"
+        f"航空：{airline}\n"
+        f"價格：約 NT${price}\n"
+        f"時間：{departure_time} → {arrival_time}\n"
+        f"轉機：{transfer}\n\n"
+        "建議購買方式：\n"
+        "1. 先到 Google Flights 搜尋同樣日期與路線。\n"
+        "2. 比對航空公司官網與訂票平台價格。\n"
+        "3. 優先確認是否含托運行李。\n"
+        "4. 檢查付款手續費、退改票規則與轉機時間。\n\n"
+        "提醒：我目前提供的是航班與價格參考，實際購買平台與最終金額請以購買頁面為準。"
+    )
