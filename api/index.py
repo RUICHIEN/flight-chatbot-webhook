@@ -244,6 +244,22 @@ def convert_to_airport_code(place):
     return resolve_airport_code(place)
 
 
+def is_valid_flight_location_id(value):
+    """SerpApi Google Flights 可接受 IATA 代碼、多機場代碼，或 /m、/g 開頭的 location id。"""
+    if not value:
+        return False
+
+    value = str(value).strip()
+
+    if re.fullmatch(r"[A-Z]{3}(,[A-Z]{3})*", value):
+        return True
+
+    if value.startswith("/m") or value.startswith("/g"):
+        return True
+
+    return False
+
+
 # -----------------------------
 # 使用者文字解析
 # -----------------------------
@@ -397,6 +413,23 @@ def format_dialogflow_date(date_value):
 
 
 def search_flights_from_serpapi(origin_code, destination_code, outbound_date):
+    # 防呆：不管前面傳進來的是「大阪市」還是「KIX,ITM」，
+    # 這裡都再轉換一次，避免 SerpApi 收到中文地名後報錯。
+    origin_code = resolve_airport_code(origin_code) or origin_code
+    destination_code = resolve_airport_code(destination_code) or destination_code
+
+    if not is_valid_flight_location_id(origin_code):
+        return {
+            "error": "INVALID_LOCATION_ID",
+            "message": f"出發地代碼不正確：{origin_code}",
+        }
+
+    if not is_valid_flight_location_id(destination_code):
+        return {
+            "error": "INVALID_LOCATION_ID",
+            "message": f"目的地代碼不正確：{destination_code}",
+        }
+
     api_key = os.environ.get("SERPAPI_KEY")
 
     if not api_key:
@@ -481,6 +514,9 @@ def build_reply_messages(origin, destination, outbound_date, flights):
 
     if isinstance(flights, dict) and flights.get("error") == "SERPAPI_ERROR":
         return [f"SerpApi 回傳錯誤：{flights.get('message')}"]
+
+    if isinstance(flights, dict) and flights.get("error") == "INVALID_LOCATION_ID":
+        return [f"地點轉換失敗：{flights.get('message')}。請改用城市、機場名稱或三碼機場代碼，例如台北、東京、大阪、TPE、NRT、KIX。"]
 
     if not flights:
         return [f"目前查不到 {origin} 到 {destination} 在 {outbound_date} 的機票資料。"]
