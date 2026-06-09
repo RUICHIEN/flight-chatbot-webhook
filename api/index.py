@@ -6,7 +6,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-
+USER_STATE = {}
 # 常用城市 / 機場對照表。
 # SerpApi Google Flights 可以接受 IATA 機場代碼，多機場城市可用逗號分隔。
 AIRPORT_MAP = {
@@ -157,7 +157,8 @@ def line_webhook():
 
         if message.get("type") == "text" and reply_token:
             user_text = message.get("text", "")
-            reply_text = handle_line_flight_query(user_text)
+            user_id = event.get("source", {}).get("userId", "unknown_user")
+            reply_text = handle_line_message(user_id, user_text)
             reply_to_line(reply_token, reply_text)
 
     return "OK", 200
@@ -597,3 +598,131 @@ def split_line_text(text, limit=4500):
         chunks.append(current)
 
     return chunks
+
+def handle_line_message(user_id, user_text):
+    user_text = user_text.strip()
+
+    state = USER_STATE.get(user_id, {
+        "step": "IDLE"
+    })
+
+    # 使用者開始查機票
+    if user_text in ["我想查機票", "查機票", "機票"]:
+        USER_STATE[user_id] = {
+            "step": "WAITING_DATE"
+        }
+
+        return (
+            "請輸入出發日期。\n\n"
+            "例如：\n"
+            "2026-07-10\n"
+            "或：7月10號"
+        )
+
+    # 等待使用者輸入日期
+    if state.get("step") == "WAITING_DATE":
+        outbound_date = parse_date_from_text(user_text)
+
+        if not outbound_date:
+            return (
+                "我沒有判斷出日期。\n\n"
+                "請輸入這種格式：\n"
+                "2026-07-10\n"
+                "或：7月10號"
+            )
+
+        USER_STATE[user_id] = {
+            "step": "WAITING_ROUTE",
+            "date": outbound_date
+        }
+
+        return (
+            f"收到，出發日期是 {outbound_date}。\n\n"
+            "請輸入出發地與目的地。\n"
+            "例如：台北飛大阪"
+        )
+
+    # 等待使用者輸入路線
+    if state.get("step") == "WAITING_ROUTE":
+        origin, destination = parse_route_from_text(user_text)
+
+        if not origin or not destination:
+            return (
+                "我沒有判斷出出發地與目的地。\n\n"
+                "請輸入這種格式：\n"
+                "台北飛大阪\n"
+                "或：台北到東京"
+            )
+
+        outbound_date = state.get("date")
+
+        USER_STATE[user_id] = {
+            "step": "RESULT_READY",
+            "date": outbound_date,
+            "origin": origin,
+            "destination": destination
+        }
+
+        return (
+            f"收到，準備查詢：\n"
+            f"日期：{outbound_date}\n"
+            f"路線：{origin} → {destination}\n\n"
+            "下一步會接上機票 API 查詢。"
+        )
+
+    # 使用者詢問如何購買
+    if user_text in ["如何購買", "怎麼買", "我要怎麼買"]:
+        if state.get("step") != "RESULT_READY":
+            return "請先查詢一次機票，再輸入「如何購買」。"
+
+        return (
+            "你可以依照上一筆查詢結果，到 Google Flights、航空公司官網或訂票平台確認。\n\n"
+            "實際購買前建議確認：\n"
+            "1. 最終票價\n"
+            "2. 是否含托運行李\n"
+            "3. 是否需要轉機\n"
+            "4. 付款手續費與退改票規則"
+        )
+
+    # 預設回覆
+    return (
+        "請輸入「我想查機票」開始查詢。\n\n"
+        "流程會依序詢問：\n"
+        "1. 出發日期\n"
+        "2. 出發地與目的地\n"
+        "3. 查詢機票結果"
+    )
+def parse_date_from_text(text):
+    text = text.strip()
+
+    # 支援 2026-07-10
+    date_match = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+
+    if date_match:
+        year = int(date_match.group(1))
+        month = int(date_match.group(2))
+        day = int(date_match.group(3))
+        return f"{year:04d}-{month:02d}-{day:02d}"
+
+    # 支援 7月10號 / 7月10日
+    date_match = re.search(r"(\d{1,2})月(\d{1,2})(號|日)?", text)
+
+    if date_match:
+        current_year = datetime.now().year
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        return f"{current_year:04d}-{month:02d}-{day:02d}"
+
+    return None
+def parse_route_from_text(text):
+    text = text.strip()
+
+    route_match = re.search(r"(.+?)(飛|到|去)(.+)", text)
+
+    if not route_match:
+        return None, None
+
+    origin = route_match.group(1).strip()
+    destination = route_match.group(3).strip()
+
+    return origin, destination
